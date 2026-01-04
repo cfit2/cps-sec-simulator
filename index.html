@@ -1,164 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>FMEVA Power Grid Risk Simulator</title>
+<meta charset="UTF-8">
+<title>FMEVA Power Grid Simulator</title>
 
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-  <style>
-    body { background: #f5f7fa; }
-    .rpn-high { background-color: #f8d7da; }
-    .rpn-medium { background-color: #fff3cd; }
-    .rpn-low { background-color: #d1e7dd; }
-    .slider-label { font-weight: 600; }
-  </style>
+<style>
+body { background:#f5f7fa; }
+canvas { background:#fff; border:1px solid #ccc; }
+.rpn-high { background:#f8d7da; }
+.rpn-medium { background:#fff3cd; }
+.rpn-low { background:#d1e7dd; }
+</style>
 </head>
 
 <body>
 <div class="container my-4">
 
-  <h2 class="mb-3 text-center">
-    Power Grid Cyber-Physical Risk Simulator (FMEVA-Based)
-  </h2>
-  <p class="text-center text-muted">
-    Adjust Severity (S), Occurrence (O), Detection (D) and observe Risk Priority Number (RPN)
-  </p>
+<h2 class="text-center">Power Grid Cyber-Physical Risk Simulator (FMEVA)</h2>
+<p class="text-center text-muted">
+Subsystem-aware Failure Modes → Effects → Vulnerabilities
+</p>
 
-  <!-- Tabs -->
-  <ul class="nav nav-tabs" id="mainTabs">
-    <li class="nav-item">
-      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#config">
-        RPN Configuration
-      </button>
-    </li>
-    <li class="nav-item">
-      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulation">
-        Simulation & Analysis
-      </button>
-    </li>
-  </ul>
+<ul class="nav nav-tabs">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#config">Configuration</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulation">Simulation & Analysis</button>
+  </li>
+</ul>
 
-  <div class="tab-content mt-3">
+<div class="tab-content mt-3">
 
-    <!-- ================= CONFIG TAB ================= -->
-    <div class="tab-pane fade show active" id="config">
+<!-- ================= CONFIGURATION ================= -->
+<div class="tab-pane fade show active" id="config">
+<table class="table table-bordered align-middle">
+<thead class="table-dark">
+<tr>
+<th>Subsystem</th>
+<th>Failure Mode (FM)</th>
+<th>Effect (E)</th>
+<th>Vulnerability (V)</th>
+<th>S</th>
+<th>O</th>
+<th>D</th>
+<th>RPN</th>
+</tr>
+</thead>
+<tbody id="configTable"></tbody>
+</table>
+</div>
 
-      <table class="table table-bordered align-middle">
-        <thead class="table-dark">
-          <tr>
-            <th>Subsystem</th>
-            <th>Severity (S)</th>
-            <th>Occurrence (O)</th>
-            <th>Detection (D)</th>
-            <th>RPN</th>
-          </tr>
-        </thead>
-        <tbody id="rpnTable"></tbody>
-      </table>
+<!-- ================= SIMULATION ================= -->
+<div class="tab-pane fade" id="simulation">
 
-      <div class="alert alert-info">
-        <strong>Note:</strong> Higher Detection score means poorer detectability.
-        RPN = S × O × D
-      </div>
-    </div>
+<h5>Parallel Coordinates (FMEVA)</h5>
+<canvas id="parallelPlot" width="900" height="300"></canvas>
 
-    <!-- ================= SIMULATION TAB ================= -->
-    <div class="tab-pane fade" id="simulation">
-
-      <h5>Risk Ranking (Highest First)</h5>
-      <ul class="list-group mb-4" id="rankingList"></ul>
-
-      <h5>Interpretation</h5>
-      <div class="alert alert-secondary" id="interpretation">
-        Adjust parameters to observe how cyber, physical, and human risks dominate.
-      </div>
-
-    </div>
+<h5 class="mt-4">Bow-Tie Analysis (Highest Risk Subsystem)</h5>
+<div class="row">
+  <div class="col-md-3">
+    <h6>Causes / Threats</h6>
+    <ul class="list-group" id="bt-causes"></ul>
+  </div>
+  <div class="col-md-3 text-center">
+    <h6>Top Event (FM)</h6>
+    <div class="alert alert-danger" id="bt-fm"></div>
+  </div>
+  <div class="col-md-3">
+    <h6>Consequences (E)</h6>
+    <ul class="list-group" id="bt-effects"></ul>
+  </div>
+  <div class="col-md-3">
+    <h6>Vulnerabilities & Controls</h6>
+    <ul class="list-group" id="bt-controls"></ul>
   </div>
 </div>
 
-<!-- Bootstrap JS -->
+<hr>
+
+<h5>Risk Ranking</h5>
+<ul class="list-group mb-3" id="ranking"></ul>
+
+<div class="alert alert-secondary" id="analysisBox"></div>
+
+</div>
+</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-const systems = [
-  { name: "Enterprise IT", S: 8, O: 6, D: 5 },
-  { name: "IT–OT Boundary", S: 9, O: 5, D: 6 },
-  { name: "SCADA / EMS", S: 10, O: 4, D: 7 },
-  { name: "PLC / RTU", S: 10, O: 3, D: 8 },
-  { name: "Dispatch Center", S: 9, O: 4, D: 8 },
-  { name: "Human Operations", S: 8, O: 5, D: 6 }
-];
+/* =========================
+   FMEVA CONSTRAINT MODEL
+   ========================= */
+const MODEL = {
+ "Enterprise IT": {
+   "Credential Compromise": {
+     "Unauthorized Access": ["Weak MFA","Phishing Exposure"],
+     "Lateral Movement": ["Flat Network","Shared Admin Accounts"]
+   }
+ },
+ "IT–OT Boundary": {
+   "Network Traversal": {
+     "Control Network Exposure": ["VLAN-only Segmentation","Firewall Misconfig"],
+     "Unauthorized Command Path": ["Protocol Bridging"]
+   }
+ },
+ "SCADA / EMS": {
+   "Command Injection": {
+     "Grid Instability": ["Unencrypted Protocols","Weak Authentication"],
+     "Loss of Control Integrity": ["Command Validation Gaps"]
+   }
+ },
+ "PLC / RTU": {
+   "Malicious Logic Execution": {
+     "Physical Equipment Stress": ["Legacy Firmware","Unsigned Logic"],
+     "Protective Relay Misfire": ["Insecure Update Mechanism"]
+   }
+ },
+ "Dispatch Center": {
+   "Loss of Visibility": {
+     "Delayed Response": ["DDoS Exposure","Single Monitoring Channel"],
+     "Blind Operation": ["No Out-of-Band Telemetry"]
+   }
+ },
+ "Human Operations": {
+   "Operator Error": {
+     "Incorrect Intervention": ["Training Gap","Poor HMI Design"],
+     "Decision Delay": ["Cognitive Overload"]
+   }
+ }
+};
 
-function calculateRPN(sys) {
-  return sys.S * sys.O * sys.D;
+/* =========================
+   PSDS CONTROLS
+   ========================= */
+const PSDS_CONTROLS = {
+ "Weak MFA": ["Strong MFA","Privileged Access Mgmt"],
+ "Phishing Exposure": ["Email Gateway","User Awareness"],
+ "Flat Network": ["Network Segmentation","Zero Trust"],
+ "VLAN-only Segmentation": ["Physical Isolation","Data Diode"],
+ "Unencrypted Protocols": ["Protocol Encryption","Command Signing"],
+ "Legacy Firmware": ["Secure Boot","Firmware Hardening"],
+ "DDoS Exposure": ["Out-of-Band Telemetry","DDoS Scrubbing"],
+ "Training Gap": ["Cyber-Physical Drills","Decision Support"],
+ "Cognitive Overload": ["Alarm Rationalization","Runbook Automation"]
+};
+
+/* =========================
+   SYSTEM STATE
+   ========================= */
+const systems = Object.keys(MODEL).map(name=>{
+ const fm = Object.keys(MODEL[name])[0];
+ const e  = Object.keys(MODEL[name][fm])[0];
+ const v  = MODEL[name][fm][e][0];
+ return {name,FM:fm,E:e,V:v,S:8,O:5,D:6};
+});
+
+const rpn = s => s.S * s.O * s.D;
+
+/* =========================
+   UI HELPERS
+   ========================= */
+function dropdown(opts,val,cb){
+ return `<select class="form-select" onchange="${cb}">
+ ${opts.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}
+ </select>`;
+}
+function slider(i,k,v){
+ return `<input type="range" min="1" max="10" value="${v}"
+ class="form-range" oninput="update(${i},'${k}',this.value)"> ${v}`;
 }
 
-function rpnClass(rpn) {
-  if (rpn >= 250) return "rpn-high";
-  if (rpn >= 150) return "rpn-medium";
-  return "rpn-low";
+/* =========================
+   UPDATE LOGIC
+   ========================= */
+function update(i,k,v){
+ systems[i][k]=v;
+ if(k==="FM"){
+   const e=Object.keys(MODEL[systems[i].name][v])[0];
+   systems[i].E=e;
+   systems[i].V=MODEL[systems[i].name][v][e][0];
+ }
+ if(k==="E"){
+   systems[i].V=MODEL[systems[i].name][systems[i].FM][v][0];
+ }
+ render();
 }
 
-function renderTable() {
-  const tbody = document.getElementById("rpnTable");
-  tbody.innerHTML = "";
-
-  systems.forEach((sys, i) => {
-    const rpn = calculateRPN(sys);
-
-    tbody.innerHTML += `
-      <tr class="${rpnClass(rpn)}">
-        <td><strong>${sys.name}</strong></td>
-        ${["S","O","D"].map(k => `
-          <td>
-            <input type="range" min="1" max="10" value="${sys[k]}"
-              class="form-range"
-              oninput="updateValue(${i}, '${k}', this.value)">
-            <div class="slider-label">${sys[k]}</div>
-          </td>
-        `).join("")}
-        <td><strong>${rpn}</strong></td>
-      </tr>
-    `;
-  });
-
-  renderSimulation();
+/* =========================
+   RENDER
+   ========================= */
+function render(){
+ const tb=document.getElementById("configTable");
+ tb.innerHTML="";
+ systems.forEach((s,i)=>{
+   const fmList=Object.keys(MODEL[s.name]);
+   const eList=Object.keys(MODEL[s.name][s.FM]);
+   const vList=MODEL[s.name][s.FM][s.E];
+   const R=rpn(s);
+   const cls=R>250?"rpn-high":R>150?"rpn-medium":"rpn-low";
+   tb.innerHTML+=`
+   <tr class="${cls}">
+     <td><b>${s.name}</b></td>
+     <td>${dropdown(fmList,s.FM,`update(${i},'FM',this.value)`)}</td>
+     <td>${dropdown(eList,s.E,`update(${i},'E',this.value)`)}</td>
+     <td>${dropdown(vList,s.V,`update(${i},'V',this.value)`)}</td>
+     <td>${slider(i,"S",s.S)}</td>
+     <td>${slider(i,"O",s.O)}</td>
+     <td>${slider(i,"D",s.D)}</td>
+     <td><b>${R}</b></td>
+   </tr>`;
+ });
+ renderParallel();
+ renderRanking();
+ renderBowTie();
 }
 
-function updateValue(index, key, value) {
-  systems[index][key] = parseInt(value);
-  renderTable();
+/* =========================
+   PARALLEL COORDINATES
+   ========================= */
+function renderParallel(){
+ const c=document.getElementById("parallelPlot");
+ const ctx=c.getContext("2d");
+ ctx.clearRect(0,0,c.width,c.height);
+ const dims=["S","O","D","RPN"];
+ const xs=dims.map((_,i)=>150+i*180);
+ dims.forEach((d,i)=>{
+   ctx.fillText(d,xs[i]-10,20);
+   ctx.beginPath(); ctx.moveTo(xs[i],30); ctx.lineTo(xs[i],280); ctx.stroke();
+ });
+ systems.forEach(s=>{
+   ctx.beginPath();
+   dims.forEach((d,i)=>{
+     const v=d==="RPN"?rpn(s):s[d];
+     const y=280-(v/10)*240;
+     i?ctx.lineTo(xs[i],y):ctx.moveTo(xs[i],y);
+   });
+   ctx.strokeStyle="rgba(0,0,200,0.5)";
+   ctx.stroke();
+ });
 }
 
-function renderSimulation() {
-  const list = document.getElementById("rankingList");
-  list.innerHTML = "";
+/* =========================
+   BOW-TIE
+   ========================= */
+function renderBowTie(){
+ const s=[...systems].sort((a,b)=>rpn(b)-rpn(a))[0];
+ document.getElementById("bt-fm").innerText=s.FM;
 
-  const sorted = [...systems]
-    .map(s => ({ ...s, rpn: calculateRPN(s) }))
-    .sort((a,b) => b.rpn - a.rpn);
+ const causes=Object.keys(MODEL[s.name][s.FM]);
+ const effects=Object.keys(MODEL[s.name][s.FM]);
+ const vulns=MODEL[s.name][s.FM][s.E];
 
-  sorted.forEach(s => {
-    list.innerHTML += `
-      <li class="list-group-item d-flex justify-content-between">
-        ${s.name}
-        <span class="badge bg-dark">RPN ${s.rpn}</span>
-      </li>
-    `;
-  });
-
-  const top = sorted[0];
-  document.getElementById("interpretation").innerHTML = `
-    <strong>Dominant Risk:</strong> ${top.name}<br>
-    This subsystem currently presents the highest systemic risk.
-    Defense investment should prioritize detection and containment here.
-  `;
+ document.getElementById("bt-causes").innerHTML=causes.map(c=>`<li class="list-group-item">${c}</li>`).join("");
+ document.getElementById("bt-effects").innerHTML=effects.map(e=>`<li class="list-group-item">${e}</li>`).join("");
+ document.getElementById("bt-controls").innerHTML=vulns.map(v=>`
+ <li class="list-group-item">
+   <b>${v}</b>
+   <ul>${(PSDS_CONTROLS[v]||["General Hardening"]).map(c=>`<li>${c}</li>`).join("")}</ul>
+ </li>`).join("");
 }
 
-renderTable();
+/* =========================
+   RANKING
+   ========================= */
+function renderRanking(){
+ const r=document.getElementById("ranking");
+ r.innerHTML="";
+ [...systems].sort((a,b)=>rpn(b)-rpn(a)).forEach(s=>{
+   r.innerHTML+=`<li class="list-group-item d-flex justify-content-between">
+   ${s.name}<span class="badge bg-dark">${rpn(s)}</span></li>`;
+ });
+ document.getElementById("analysisBox").innerHTML=
+ "<b>Insight:</b> Highest RPN subsystem drives Bow-Tie and PSDS prioritization.";
+}
+
+render();
 </script>
 </body>
 </html>
