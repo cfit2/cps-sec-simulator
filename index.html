@@ -2,16 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FMEVA Power Grid Simulator</title>
+<title>FMEVA Power Grid Simulator (IEEE Demo)</title>
 
+<!-- Bootstrap -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- D3 + Parcoords -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/d3-parcoords@1.1.5/d3.parcoords.css">
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-parcoords@1.1.5/d3.parcoords.js"></script>
 
 <style>
 body { background:#f5f7fa; }
-canvas { background:#fff; border:1px solid #ccc; }
 .rpn-high { background:#f8d7da; }
 .rpn-medium { background:#fff3cd; }
 .rpn-low { background:#d1e7dd; }
+#parcoords { height: 320px; }
 </style>
 </head>
 
@@ -20,64 +26,54 @@ canvas { background:#fff; border:1px solid #ccc; }
 
 <h2 class="text-center">Power Grid Cyber-Physical Risk Simulator (FMEVA)</h2>
 <p class="text-center text-muted">
-Subsystem-aware Failure Modes → Effects → Vulnerabilities
+Subsystem-specific FM → E → V with quantitative risk reasoning
 </p>
 
 <ul class="nav nav-tabs">
   <li class="nav-item">
-    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#config">Configuration</button>
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#config">
+      Configuration
+    </button>
   </li>
   <li class="nav-item">
-    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulation">Simulation & Analysis</button>
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulation">
+      Simulation & Analysis
+    </button>
   </li>
 </ul>
 
 <div class="tab-content mt-3">
 
-<!-- ================= CONFIGURATION ================= -->
+<!-- ================= CONFIG TAB ================= -->
 <div class="tab-pane fade show active" id="config">
+
+<div class="alert alert-info">
+<b>Guidance for S / O / D Scoring (FMEVA)</b>
+<ul>
+<li><b>Severity (S)</b>: Impact if failure occurs (10 = grid instability, safety risk, national disruption)</li>
+<li><b>Occurrence (O)</b>: Likelihood given architecture & exposure (10 = frequent / highly exposed)</li>
+<li><b>Detection (D)</b>: Ability to detect before impact (10 = no visibility, late detection)</li>
+</ul>
+<b>Rule of thumb:</b> Detection dominates cyber-physical cascades.
+</div>
+
 <table class="table table-bordered align-middle">
 <thead class="table-dark">
 <tr>
-<th>Subsystem</th>
-<th>Failure Mode (FM)</th>
-<th>Effect (E)</th>
-<th>Vulnerability (V)</th>
-<th>S</th>
-<th>O</th>
-<th>D</th>
-<th>RPN</th>
+<th>Subsystem</th><th>FM</th><th>E</th><th>V</th>
+<th>S</th><th>O</th><th>D</th><th>RPN</th>
 </tr>
 </thead>
 <tbody id="configTable"></tbody>
 </table>
+
 </div>
 
-<!-- ================= SIMULATION ================= -->
+<!-- ================= SIMULATION TAB ================= -->
 <div class="tab-pane fade" id="simulation">
 
 <h5>Parallel Coordinates (FMEVA)</h5>
-<canvas id="parallelPlot" width="900" height="300"></canvas>
-
-<h5 class="mt-4">Bow-Tie Analysis (Highest Risk Subsystem)</h5>
-<div class="row">
-  <div class="col-md-3">
-    <h6>Causes / Threats</h6>
-    <ul class="list-group" id="bt-causes"></ul>
-  </div>
-  <div class="col-md-3 text-center">
-    <h6>Top Event (FM)</h6>
-    <div class="alert alert-danger" id="bt-fm"></div>
-  </div>
-  <div class="col-md-3">
-    <h6>Consequences (E)</h6>
-    <ul class="list-group" id="bt-effects"></ul>
-  </div>
-  <div class="col-md-3">
-    <h6>Vulnerabilities & Controls</h6>
-    <ul class="list-group" id="bt-controls"></ul>
-  </div>
-</div>
+<div id="parcoords"></div>
 
 <hr>
 
@@ -93,190 +89,121 @@ Subsystem-aware Failure Modes → Effects → Vulnerabilities
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-/* =========================
-   FMEVA CONSTRAINT MODEL
-   ========================= */
+/* ================= FMEVA MODEL ================= */
 const MODEL = {
  "Enterprise IT": {
    "Credential Compromise": {
-     "Unauthorized Access": ["Weak MFA","Phishing Exposure"],
-     "Lateral Movement": ["Flat Network","Shared Admin Accounts"]
+     "Unauthorized Access": ["Weak MFA","Phishing Exposure"]
    }
  },
  "IT–OT Boundary": {
    "Network Traversal": {
-     "Control Network Exposure": ["VLAN-only Segmentation","Firewall Misconfig"],
-     "Unauthorized Command Path": ["Protocol Bridging"]
+     "Control Network Exposure": ["VLAN-only Segmentation"]
    }
  },
  "SCADA / EMS": {
    "Command Injection": {
-     "Grid Instability": ["Unencrypted Protocols","Weak Authentication"],
-     "Loss of Control Integrity": ["Command Validation Gaps"]
+     "Grid Instability": ["Unencrypted Protocols"]
    }
  },
  "PLC / RTU": {
    "Malicious Logic Execution": {
-     "Physical Equipment Stress": ["Legacy Firmware","Unsigned Logic"],
-     "Protective Relay Misfire": ["Insecure Update Mechanism"]
+     "Physical Equipment Stress": ["Legacy Firmware"]
    }
  },
  "Dispatch Center": {
    "Loss of Visibility": {
-     "Delayed Response": ["DDoS Exposure","Single Monitoring Channel"],
-     "Blind Operation": ["No Out-of-Band Telemetry"]
+     "Delayed Response": ["DDoS Exposure"]
    }
  },
  "Human Operations": {
    "Operator Error": {
-     "Incorrect Intervention": ["Training Gap","Poor HMI Design"],
-     "Decision Delay": ["Cognitive Overload"]
+     "Incorrect Intervention": ["Training Gap"]
    }
  }
 };
 
-/* =========================
-   PSDS CONTROLS
-   ========================= */
-const PSDS_CONTROLS = {
- "Weak MFA": ["Strong MFA","Privileged Access Mgmt"],
- "Phishing Exposure": ["Email Gateway","User Awareness"],
- "Flat Network": ["Network Segmentation","Zero Trust"],
- "VLAN-only Segmentation": ["Physical Isolation","Data Diode"],
- "Unencrypted Protocols": ["Protocol Encryption","Command Signing"],
- "Legacy Firmware": ["Secure Boot","Firmware Hardening"],
- "DDoS Exposure": ["Out-of-Band Telemetry","DDoS Scrubbing"],
- "Training Gap": ["Cyber-Physical Drills","Decision Support"],
- "Cognitive Overload": ["Alarm Rationalization","Runbook Automation"]
-};
-
-/* =========================
-   SYSTEM STATE
-   ========================= */
+/* ================= STATE ================= */
 const systems = Object.keys(MODEL).map(name=>{
  const fm = Object.keys(MODEL[name])[0];
  const e  = Object.keys(MODEL[name][fm])[0];
  const v  = MODEL[name][fm][e][0];
- return {name,FM:fm,E:e,V:v,S:8,O:5,D:6};
+ return {Subsystem:name,FM:fm,E:e,V:v,S:8,O:5,D:6};
 });
 
 const rpn = s => s.S * s.O * s.D;
 
-/* =========================
-   UI HELPERS
-   ========================= */
+/* ================= UI ================= */
+function slider(i,k,v){
+ return `<input type="range" min="1" max="10" value="${v}"
+ oninput="update(${i},'${k}',this.value)"> ${v}`;
+}
+
 function dropdown(opts,val,cb){
  return `<select class="form-select" onchange="${cb}">
  ${opts.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}
  </select>`;
 }
-function slider(i,k,v){
- return `<input type="range" min="1" max="10" value="${v}"
- class="form-range" oninput="update(${i},'${k}',this.value)"> ${v}`;
-}
 
-/* =========================
-   UPDATE LOGIC
-   ========================= */
 function update(i,k,v){
- systems[i][k]=v;
- if(k==="FM"){
-   const e=Object.keys(MODEL[systems[i].name][v])[0];
-   systems[i].E=e;
-   systems[i].V=MODEL[systems[i].name][v][e][0];
- }
- if(k==="E"){
-   systems[i].V=MODEL[systems[i].name][systems[i].FM][v][0];
- }
+ systems[i][k]=isNaN(v)?v:+v;
  render();
 }
 
-/* =========================
-   RENDER
-   ========================= */
+/* ================= RENDER ================= */
 function render(){
  const tb=document.getElementById("configTable");
  tb.innerHTML="";
  systems.forEach((s,i)=>{
-   const fmList=Object.keys(MODEL[s.name]);
-   const eList=Object.keys(MODEL[s.name][s.FM]);
-   const vList=MODEL[s.name][s.FM][s.E];
    const R=rpn(s);
    const cls=R>250?"rpn-high":R>150?"rpn-medium":"rpn-low";
    tb.innerHTML+=`
    <tr class="${cls}">
-     <td><b>${s.name}</b></td>
-     <td>${dropdown(fmList,s.FM,`update(${i},'FM',this.value)`)}</td>
-     <td>${dropdown(eList,s.E,`update(${i},'E',this.value)`)}</td>
-     <td>${dropdown(vList,s.V,`update(${i},'V',this.value)`)}</td>
-     <td>${slider(i,"S",s.S)}</td>
-     <td>${slider(i,"O",s.O)}</td>
-     <td>${slider(i,"D",s.D)}</td>
-     <td><b>${R}</b></td>
+   <td>${s.Subsystem}</td>
+   <td>${s.FM}</td>
+   <td>${s.E}</td>
+   <td>${s.V}</td>
+   <td>${slider(i,"S",s.S)}</td>
+   <td>${slider(i,"O",s.O)}</td>
+   <td>${slider(i,"D",s.D)}</td>
+   <td><b>${R}</b></td>
    </tr>`;
  });
- renderParallel();
+ renderParcoords();
  renderRanking();
- renderBowTie();
 }
 
-/* =========================
-   PARALLEL COORDINATES
-   ========================= */
-function renderParallel(){
- const c=document.getElementById("parallelPlot");
- const ctx=c.getContext("2d");
- ctx.clearRect(0,0,c.width,c.height);
- const dims=["S","O","D","RPN"];
- const xs=dims.map((_,i)=>150+i*180);
- dims.forEach((d,i)=>{
-   ctx.fillText(d,xs[i]-10,20);
-   ctx.beginPath(); ctx.moveTo(xs[i],30); ctx.lineTo(xs[i],280); ctx.stroke();
- });
- systems.forEach(s=>{
-   ctx.beginPath();
-   dims.forEach((d,i)=>{
-     const v=d==="RPN"?rpn(s):s[d];
-     const y=280-(v/10)*240;
-     i?ctx.lineTo(xs[i],y):ctx.moveTo(xs[i],y);
-   });
-   ctx.strokeStyle="rgba(0,0,200,0.5)";
-   ctx.stroke();
- });
+/* ================= PARALLEL COORDS ================= */
+function renderParcoords(){
+ const data = systems.map(s=>({
+   Subsystem:s.Subsystem,
+   S:s.S, O:s.O, D:s.D,
+   RPN:rpn(s)
+ }));
+
+ d3.select("#parcoords").html("");
+
+ const pc = d3.parcoords()("#parcoords")
+   .data(data)
+   .hideAxis(["Subsystem"])
+   .alpha(0.6)
+   .render()
+   .brushMode("1D-axes");
 }
 
-/* =========================
-   BOW-TIE
-   ========================= */
-function renderBowTie(){
- const s=[...systems].sort((a,b)=>rpn(b)-rpn(a))[0];
- document.getElementById("bt-fm").innerText=s.FM;
-
- const causes=Object.keys(MODEL[s.name][s.FM]);
- const effects=Object.keys(MODEL[s.name][s.FM]);
- const vulns=MODEL[s.name][s.FM][s.E];
-
- document.getElementById("bt-causes").innerHTML=causes.map(c=>`<li class="list-group-item">${c}</li>`).join("");
- document.getElementById("bt-effects").innerHTML=effects.map(e=>`<li class="list-group-item">${e}</li>`).join("");
- document.getElementById("bt-controls").innerHTML=vulns.map(v=>`
- <li class="list-group-item">
-   <b>${v}</b>
-   <ul>${(PSDS_CONTROLS[v]||["General Hardening"]).map(c=>`<li>${c}</li>`).join("")}</ul>
- </li>`).join("");
-}
-
-/* =========================
-   RANKING
-   ========================= */
+/* ================= RANKING ================= */
 function renderRanking(){
  const r=document.getElementById("ranking");
  r.innerHTML="";
  [...systems].sort((a,b)=>rpn(b)-rpn(a)).forEach(s=>{
-   r.innerHTML+=`<li class="list-group-item d-flex justify-content-between">
-   ${s.name}<span class="badge bg-dark">${rpn(s)}</span></li>`;
+   r.innerHTML+=`
+   <li class="list-group-item d-flex justify-content-between">
+   ${s.Subsystem}
+   <span class="badge bg-dark">${rpn(s)}</span>
+   </li>`;
  });
- document.getElementById("analysisBox").innerHTML=
- "<b>Insight:</b> Highest RPN subsystem drives Bow-Tie and PSDS prioritization.";
+ document.getElementById("analysisBox").innerHTML =
+ "<b>Interpretation:</b> High RPN subsystems should drive PSDS investment and Bow-Tie analysis.";
 }
 
 render();
