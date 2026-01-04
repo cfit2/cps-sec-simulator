@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FMEVA Power Grid Risk Simulator</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body { background: #f5f7fa; }
+    .rpn-high { background-color: #f8d7da; }
+    .rpn-medium { background-color: #fff3cd; }
+    .rpn-low { background-color: #d1e7dd; }
+    .slider-label { font-weight: 600; }
+  </style>
+</head>
+
+<body>
+<div class="container my-4">
+
+  <h2 class="mb-3 text-center">
+    Power Grid Cyber-Physical Risk Simulator (FMEVA-Based)
+  </h2>
+  <p class="text-center text-muted">
+    Adjust Severity (S), Occurrence (O), Detection (D) and observe Risk Priority Number (RPN)
+  </p>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="mainTabs">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#config">
+        RPN Configuration
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#simulation">
+        Simulation & Analysis
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content mt-3">
+
+    <!-- ================= CONFIG TAB ================= -->
+    <div class="tab-pane fade show active" id="config">
+
+      <table class="table table-bordered align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th>Subsystem</th>
+            <th>Severity (S)</th>
+            <th>Occurrence (O)</th>
+            <th>Detection (D)</th>
+            <th>RPN</th>
+          </tr>
+        </thead>
+        <tbody id="rpnTable"></tbody>
+      </table>
+
+      <div class="alert alert-info">
+        <strong>Note:</strong> Higher Detection score means poorer detectability.
+        RPN = S × O × D
+      </div>
+    </div>
+
+    <!-- ================= SIMULATION TAB ================= -->
+    <div class="tab-pane fade" id="simulation">
+
+      <h5>Risk Ranking (Highest First)</h5>
+      <ul class="list-group mb-4" id="rankingList"></ul>
+
+      <h5>Interpretation</h5>
+      <div class="alert alert-secondary" id="interpretation">
+        Adjust parameters to observe how cyber, physical, and human risks dominate.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const systems = [
+  { name: "Enterprise IT", S: 8, O: 6, D: 5 },
+  { name: "IT–OT Boundary", S: 9, O: 5, D: 6 },
+  { name: "SCADA / EMS", S: 10, O: 4, D: 7 },
+  { name: "PLC / RTU", S: 10, O: 3, D: 8 },
+  { name: "Dispatch Center", S: 9, O: 4, D: 8 },
+  { name: "Human Operations", S: 8, O: 5, D: 6 }
+];
+
+function calculateRPN(sys) {
+  return sys.S * sys.O * sys.D;
+}
+
+function rpnClass(rpn) {
+  if (rpn >= 250) return "rpn-high";
+  if (rpn >= 150) return "rpn-medium";
+  return "rpn-low";
+}
+
+function renderTable() {
+  const tbody = document.getElementById("rpnTable");
+  tbody.innerHTML = "";
+
+  systems.forEach((sys, i) => {
+    const rpn = calculateRPN(sys);
+
+    tbody.innerHTML += `
+      <tr class="${rpnClass(rpn)}">
+        <td><strong>${sys.name}</strong></td>
+        ${["S","O","D"].map(k => `
+          <td>
+            <input type="range" min="1" max="10" value="${sys[k]}"
+              class="form-range"
+              oninput="updateValue(${i}, '${k}', this.value)">
+            <div class="slider-label">${sys[k]}</div>
+          </td>
+        `).join("")}
+        <td><strong>${rpn}</strong></td>
+      </tr>
+    `;
+  });
+
+  renderSimulation();
+}
+
+function updateValue(index, key, value) {
+  systems[index][key] = parseInt(value);
+  renderTable();
+}
+
+function renderSimulation() {
+  const list = document.getElementById("rankingList");
+  list.innerHTML = "";
+
+  const sorted = [...systems]
+    .map(s => ({ ...s, rpn: calculateRPN(s) }))
+    .sort((a,b) => b.rpn - a.rpn);
+
+  sorted.forEach(s => {
+    list.innerHTML += `
+      <li class="list-group-item d-flex justify-content-between">
+        ${s.name}
+        <span class="badge bg-dark">RPN ${s.rpn}</span>
+      </li>
+    `;
+  });
+
+  const top = sorted[0];
+  document.getElementById("interpretation").innerHTML = `
+    <strong>Dominant Risk:</strong> ${top.name}<br>
+    This subsystem currently presents the highest systemic risk.
+    Defense investment should prioritize detection and containment here.
+  `;
+}
+
+renderTable();
+</script>
+</body>
+</html>
