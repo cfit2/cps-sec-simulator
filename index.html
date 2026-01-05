@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FMEVA Power Grid Simulator (Pure JS)</title>
+<title>FMEVA Power Grid Simulator (Pure JS v2)</title>
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -13,7 +13,6 @@ select { min-width:160px; }
 .rpn-high { background:#f8d7da; }
 .rpn-medium { background:#fff3cd; }
 .rpn-low { background:#d1e7dd; }
-.axis-label { font-size:12px; fill:#000; }
 </style>
 </head>
 
@@ -22,7 +21,7 @@ select { min-width:160px; }
 
 <h2 class="text-center">Power Grid Cyber-Physical Risk Simulator (FMEVA)</h2>
 <p class="text-center text-muted">
-Pure JavaScript Parallel Coordinates • FM / E / V Included
+Dynamic Scaling • RPN-Colored Parallel Coordinates • Bow-Tie
 </p>
 
 <ul class="nav nav-tabs">
@@ -41,9 +40,9 @@ Pure JavaScript Parallel Coordinates • FM / E / V Included
 
 <div class="alert alert-info">
 <b>S / O / D Guidance</b><br>
-Severity: impact on grid & safety<br>
-Occurrence: likelihood given exposure<br>
-Detection: ability to detect before physical impact (10 = blind)
+Severity = impact on grid & safety<br>
+Occurrence = likelihood given exposure<br>
+Detection = ability to detect before physical impact (10 = blind)
 </div>
 
 <table class="table table-bordered align-middle">
@@ -61,8 +60,30 @@ Detection: ability to detect before physical impact (10 = blind)
 <!-- ================= SIMULATION ================= -->
 <div class="tab-pane fade" id="simulation">
 
-<h5>Parallel Coordinates (FM–E–V–S–O–D–RPN)</h5>
+<h5>Parallel Coordinates (Data-Scaled)</h5>
 <canvas id="pc" width="1000" height="350"></canvas>
+
+<hr>
+
+<h5>Bow-Tie Analysis (Highest-Risk Subsystem)</h5>
+<div class="row">
+  <div class="col-md-3">
+    <h6>Causes</h6>
+    <ul class="list-group" id="bt-causes"></ul>
+  </div>
+  <div class="col-md-3 text-center">
+    <h6>Top Event</h6>
+    <div class="alert alert-danger" id="bt-fm"></div>
+  </div>
+  <div class="col-md-3">
+    <h6>Consequences</h6>
+    <ul class="list-group" id="bt-effects"></ul>
+  </div>
+  <div class="col-md-3">
+    <h6>Vulnerabilities</h6>
+    <ul class="list-group" id="bt-vulns"></ul>
+  </div>
+</div>
 
 <hr>
 
@@ -80,7 +101,8 @@ Detection: ability to detect before physical impact (10 = blind)
 const MODEL = {
  "Enterprise IT": {
    "Credential Compromise": {
-     "Unauthorized Access": ["Weak MFA","Phishing Exposure"]
+     "Unauthorized Access": ["Weak MFA","Phishing Exposure"],
+     "Lateral Movement": ["Flat Network"]
    }
  },
  "IT–OT Boundary": {
@@ -120,7 +142,7 @@ const systems = Object.keys(MODEL).map(name=>{
 
 const rpn = s => s.S*s.O*s.D;
 
-/* ================= HELPERS ================= */
+/* ================= UI HELPERS ================= */
 function dropdown(opts,val,cb){
  return `<select class="form-select" onchange="${cb}">
  ${opts.map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}
@@ -134,7 +156,6 @@ function slider(i,k,v){
 /* ================= UPDATE ================= */
 function update(i,k,v){
  systems[i][k]=isNaN(v)?v:+v;
-
  if(k==="FM"){
    const e=Object.keys(MODEL[systems[i].Subsystem][v])[0];
    systems[i].E=e;
@@ -146,7 +167,7 @@ function update(i,k,v){
  render();
 }
 
-/* ================= CONFIG RENDER ================= */
+/* ================= CONFIG ================= */
 function render(){
  const tb=document.getElementById("configTable");
  tb.innerHTML="";
@@ -170,9 +191,10 @@ function render(){
  });
  renderRanking();
  drawParcoords();
+ renderBowTie();
 }
 
-/* ================= PARALLEL COORDS (PURE JS) ================= */
+/* ================= PARALLEL COORDS (SCALED + COLORED) ================= */
 function drawParcoords(){
  const canvas=document.getElementById("pc");
  const ctx=canvas.getContext("2d");
@@ -182,18 +204,18 @@ function drawParcoords(){
  const xStep=(canvas.width-100)/(dims.length-1);
  const xPos=dims.map((_,i)=>50+i*xStep);
 
- // Build categorical maps
  const fmMap={}, eMap={}, vMap={};
  let idx=1;
  systems.forEach(s=>{ if(!fmMap[s.FM]) fmMap[s.FM]=idx++; });
- idx=1;
- systems.forEach(s=>{ if(!eMap[s.E]) eMap[s.E]=idx++; });
- idx=1;
- systems.forEach(s=>{ if(!vMap[s.V]) vMap[s.V]=idx++; });
+ idx=1; systems.forEach(s=>{ if(!eMap[s.E]) eMap[s.E]=idx++; });
+ idx=1; systems.forEach(s=>{ if(!vMap[s.V]) vMap[s.V]=idx++; });
 
- // Draw axes
- ctx.strokeStyle="#000";
- ctx.fillStyle="#000";
+ const rpnVals=systems.map(s=>rpn(s));
+ const rpnMin=Math.min(...rpnVals);
+ const rpnMax=Math.max(...rpnVals);
+
+ const scaleY=(v,min,max)=>310-((v-min)/(max-min||1))*260;
+
  dims.forEach((d,i)=>{
    ctx.beginPath();
    ctx.moveTo(xPos[i],40);
@@ -202,28 +224,47 @@ function drawParcoords(){
    ctx.fillText(d,xPos[i]-10,20);
  });
 
- // Draw lines
  systems.forEach(s=>{
    ctx.beginPath();
    dims.forEach((d,i)=>{
-     let val;
-     if(d==="FM") val=fmMap[s.FM];
-     else if(d==="E") val=eMap[s.E];
-     else if(d==="V") val=vMap[s.V];
-     else if(d==="RPN") val=rpn(s)/100; // normalize
-     else val=s[d];
+     let val,min,max;
+     if(d==="FM"){ val=fmMap[s.FM]; min=1; max=Object.keys(fmMap).length; }
+     else if(d==="E"){ val=eMap[s.E]; min=1; max=Object.keys(eMap).length; }
+     else if(d==="V"){ val=vMap[s.V]; min=1; max=Object.keys(vMap).length; }
+     else if(d==="RPN"){ val=rpn(s); min=rpnMin; max=rpnMax; }
+     else { val=s[d]; min=Math.min(...systems.map(x=>x[d])); max=Math.max(...systems.map(x=>x[d])); }
 
-     const max=(d==="FM")?Object.keys(fmMap).length:
-               (d==="E")?Object.keys(eMap).length:
-               (d==="V")?Object.keys(vMap).length:
-               (d==="RPN")?10:10;
-
-     const y=310-(val/max)*260;
+     const y=scaleY(val,min,max);
      i?ctx.lineTo(xPos[i],y):ctx.moveTo(xPos[i],y);
    });
-   ctx.strokeStyle="rgba(0,0,200,0.5)";
+
+   const color = rpn(s)===rpnMax
+     ? "rgba(200,0,0,0.85)"
+     : rpn(s) >= rpnMin + 0.7*(rpnMax-rpnMin)
+       ? "rgba(255,140,0,0.7)"
+       : "rgba(30,100,200,0.5)";
+
+   ctx.strokeStyle=color;
    ctx.stroke();
  });
+}
+
+/* ================= BOW-TIE ================= */
+function renderBowTie(){
+ const s=[...systems].sort((a,b)=>rpn(b)-rpn(a))[0];
+ document.getElementById("bt-fm").innerText=s.FM;
+
+ document.getElementById("bt-causes").innerHTML =
+ Object.keys(MODEL[s.Subsystem])
+ .map(x=>`<li class="list-group-item">${x}</li>`).join("");
+
+ document.getElementById("bt-effects").innerHTML =
+ Object.keys(MODEL[s.Subsystem][s.FM])
+ .map(x=>`<li class="list-group-item">${x}</li>`).join("");
+
+ document.getElementById("bt-vulns").innerHTML =
+ MODEL[s.Subsystem][s.FM][s.E]
+ .map(x=>`<li class="list-group-item">${x}</li>`).join("");
 }
 
 /* ================= RANKING ================= */
